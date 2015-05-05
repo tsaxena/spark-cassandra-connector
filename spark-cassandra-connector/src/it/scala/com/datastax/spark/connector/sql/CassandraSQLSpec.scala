@@ -452,16 +452,88 @@ class CassandraSQLSpec extends SparkCassandraITFlatSpecBase {
     cc.sql("DESCRIBE EXTENDED sql_test.test1").collect() should have length 8
   }
 
-  it should "drop a table" in {
-    //DROP TABLE IF EXISTS test1
+  it should "show clusters" in {
+    cc.sql("SHOW CLUSTERS").collect() should have length 1
   }
 
-  it should "show a database" in {
-    //SHOW sql_test
+  it should "show databases" in {
+    cc.sql("SHOW DATABASES").collect() should have length 2
+    cc.sql("SHOW DATABASES IN default").collect() should have length 2
+  }
+
+  it should "show tables" in {
+    cc.sql("SHOW TABLES").collect() should have length 12
+    cc.sql("SHOW TABLES IN sql_test").collect() should have length 12
+    cc.sql("SHOW TABLES IN default.sql_test").collect() should have length 12
   }
 
   it should "use a database" in {
-    //USE sql_test
+    cc.sql("USE DATABASE keyspace");
+    cc.getKeyspace should equal("keyspace")
+    cc.sql("USE DATABASE sql_test");
+    cc.getKeyspace should equal("sql_test")
   }
 
+  it should "create/drop a database" in {
+    cc.sql("CREATE DATABASE db_test");
+    cc.sql("SHOW DATABASES").collect() should have length 3
+    cc.sql("USE DATABASE db_test")
+    cc.sql(
+      s"""
+        |CREATE TABLE fake_table
+        |USING parquet
+        |OPTIONS (
+        | path "fake"
+        | )
+      """.stripMargin.replaceAll("\n", " "))
+    cc.sql("DROP DATABASE db_test")
+    cc.sql("SHOW DATABASES").collect() should have length 2
+    cc.sql("CREATE DATABASE cluster2.db_test");
+    cc.sql("USE CLUSTER cluster2");
+    cc.sql("SHOW DATABASES").collect() should have length 1
+    cc.sql("DROP CLUSTER cluster2")
+    cc.sql("USE CLUSTER default")
+  }
+
+  it should "create/drop a cluster" in {
+    cc.sql("CREATE CLUSTER cluster_test");
+    cc.sql("SHOW CLUSTERS").collect() should have length 2
+    cc.sql("DROP CLUSTER cluster_test")
+    cc.sql("SHOW CLUSTERS").collect() should have length 1
+  }
+
+  it should "drop a table" in {
+    cc.sql("CREATE DATABASE db_test");
+    cc.sql("USE DATABASE db_test")
+    cc.sql(
+      s"""
+        |CREATE TABLE fake_table
+        |USING parquet
+        |OPTIONS (
+        | path "fake"
+        | )
+      """.stripMargin.replaceAll("\n", " "))
+    cc.sql("SHOW TABLES").collect() should have length 1
+    cc.sql("DROP TABLE fake_table")
+    cc.sql("SHOW TABLES").collect() should have length 0
+    cc.sql("DROP DATABASE db_test")
+  }
+
+  it should "rename a table" in {
+    cc.sql("CREATE DATABASE db_test");
+    cc.sql("USE DATABASE db_test")
+    cc.sql(
+      s"""
+        |CREATE TABLE fake_table
+        |USING parquet
+        |OPTIONS (
+        | path "fake"
+        | )
+      """.stripMargin.replaceAll("\n", " "))
+    cc.sql("ALTER TABLE fake_table RENAME TO real_table")
+    cc.sql("SHOW TABLES").collect() should have length 1
+    cc.sql("DROP TABLE real_table")
+    cc.sql("SHOW TABLES").collect() should have length 0
+    cc.sql("DROP DATABASE db_test")
+  }
 }
